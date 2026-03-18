@@ -165,7 +165,7 @@ export const subscriptionApi = {
 
   getPlans: () => apiRequest<Plan[]>('/v1/plans/'),
 
-  getUsage: () => apiRequest<Usage>('/v1/usage'),
+  getUsage: () => apiRequest<Usage>('/v1/stats/'),
 
   upgrade: (planId: string) =>
     apiRequest<Subscription>(`/v1/subscription/${planId}`, {
@@ -218,8 +218,8 @@ export interface Subscription {
 }
 
 export interface Plan {
-  id: string;
-  name: string;
+  plan_id: string;
+  plan_tier: string;
   price: number;
   duration_days: number;
   max_projects: number;
@@ -228,10 +228,12 @@ export interface Plan {
 }
 
 export interface Usage {
-  projects_used: number;
-  projects_limit: number;
-  tasks_used: number;
-  tasks_limit: number;
-  storage_used: number;
-  storage_limit: number;
+  projects_count: number;
+  tasks_count: number;
+  tasks_completed_count: number;
+  tasks_in_progress_count: number;
+  tasks_pending_count: number;
+  task_limit: number;
+  project_limit: number;
+
 }

@@ -10,58 +10,6 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
-// Mock data for demo
-const mockSubscription: Subscription = {
-  id: '1',
-  plan_id: 'pro',
-  plan_name: 'Professional',
-  status: 'active',
-  current_period_start: '2024-01-01',
-  current_period_end: '2024-02-01',
-  features: ['Unlimited projects', 'Unlimited tasks', 'Advanced analytics', 'Priority support'],
-  max_projects: 20,
-  task_per_day: 100,
-  export_allowed: true,
-};
-
-const mockUsage: Usage = {
-  projects_used: 5,
-  projects_limit: -1,
-  tasks_used: 47,
-  tasks_limit: -1,
-  storage_used: 256,
-  storage_limit: 5120,
-};
-
-const mockPlans: Plan[] = [
-  {
-    id: 'starter',
-    name: 'Starter',
-    price: 0,
-    duration_days: 30,
-    max_projects: 3,
-    task_per_day: 20,
-    export_allowed: false,
-  },
-  {
-    id: 'pro',
-    name: 'Professional',
-    price: 19,
-    duration_days: 30,
-    max_projects: 20,
-    task_per_day: 100,
-    export_allowed: true,
-  },
-  {
-    id: 'enterprise',
-    name: 'Enterprise',
-    price: 49,
-    duration_days: 30,
-    max_projects: -1,
-    task_per_day: -1,
-    export_allowed: true,
-  },
-];
 
 const planIcons = {
   starter: Zap,
@@ -85,9 +33,9 @@ const SubscriptionPage = () => {
         subscriptionApi.getPlans(),
       ]);
 
-      setSubscription(subRes.data || mockSubscription);
-      setUsage(usageRes.data || mockUsage);
-      setPlans(plansRes.data || mockPlans);
+      setSubscription(subRes.data);
+      setUsage(usageRes.data);
+      setPlans(plansRes.data);
       setIsLoading(false);
     };
 
@@ -101,14 +49,14 @@ const SubscriptionPage = () => {
 
     if (data || !error) {
       // Demo: update locally
-      const plan = plans.find((p) => p.id === planId);
+      const plan = plans.find((p) => p.plan_id === planId);
       if (plan) {
         setSubscription({
-          ...mockSubscription,
+          ...subscription,
           plan_id: planId,
-          plan_name: plan.name,
+          plan_name: plan.plan_tier,
         });
-        toast({ title: `Successfully upgraded to ${plan.name}!` });
+        toast({ title: `Successfully upgraded to ${plan.plan_tier}!` });
       }
     } else {
       toast({ title: 'Failed to upgrade', variant: 'destructive' });
@@ -125,7 +73,10 @@ const SubscriptionPage = () => {
     );
   }
 
-  const currentPlan = plans.find((p) => p.id === subscription?.plan_id) || mockPlans[1];
+  console.log('plans', plans)
+  console.log('subscription', subscription)
+  const currentPlan = plans.find((p) => p.plan_id === subscription?.plan_id);
+  console.log('current plan is', currentPlan)
 
   return (
     <DashboardLayout>
@@ -162,18 +113,22 @@ const SubscriptionPage = () => {
                 </div>
               </div>
               <div className="text-sm text-muted-foreground">
-                <p>Current period:</p>
-                <p className="font-medium text-foreground">
-                  {new Date(subscription?.current_period_start || '').toLocaleDateString()} -{' '}
-                  {new Date(subscription?.current_period_end || '').toLocaleDateString()}
-                </p>
+                {subscription.plan_name == "Free" ? ('') : (
+                  <>
+                    <p>Current period :</p>
+                    <p className="font-medium text-foreground">
+                      {new Date(subscription?.current_period_start || '').toLocaleDateString()} -{' '}
+                      {new Date(subscription?.current_period_end || '').toLocaleDateString()}
+                    </p>
+                  </>
+                )}
               </div>
             </div>
           </CardContent>
-        </Card>
+        </Card >
 
         {/* Usage */}
-        <Card>
+        < Card >
           <CardHeader>
             <CardTitle>Usage</CardTitle>
           </CardHeader>
@@ -183,12 +138,12 @@ const SubscriptionPage = () => {
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Projects</span>
                   <span className="font-medium text-foreground">
-                    {usage?.projects_used}
-                    {usage?.projects_limit === -1 ? ' / Unlimited' : ` / ${usage?.projects_limit}`}
+                    {usage?.projects_count}
+                    {usage?.project_limit === -1 ? ' / Unlimited' : ` / ${usage?.project_limit}`}
                   </span>
                 </div>
                 <Progress
-                  value={usage?.projects_limit === -1 ? 30 : (usage?.projects_used! / usage?.projects_limit!) * 100}
+                  value={usage?.project_limit === -1 ? 30 : (usage?.projects_count! / usage?.project_limit!) * 100}
                   className="h-2"
                 />
               </div>
@@ -197,33 +152,33 @@ const SubscriptionPage = () => {
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Tasks</span>
                   <span className="font-medium text-foreground">
-                    {usage?.tasks_used}
-                    {usage?.tasks_limit === -1 ? ' / Unlimited' : ` / ${usage?.tasks_limit}`}
+                    {usage?.tasks_count}
+                    {usage?.task_limit === -1 ? ' / Unlimited' : ` / ${usage?.task_limit}`}
                   </span>
                 </div>
                 <Progress
-                  value={usage?.tasks_limit === -1 ? 25 : (usage?.tasks_used! / usage?.tasks_limit!) * 100}
+                  value={usage?.task_limit === -1 ? 25 : (usage?.tasks_count! / usage?.task_limit!) * 100}
                   className="h-2"
                 />
               </div>
 
-              
+
             </div>
           </CardContent>
-        </Card>
+        </Card >
 
         {/* Available Plans */}
-        <div>
+        < div >
           <h2 className="text-xl font-semibold text-foreground mb-4">Available Plans</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {plans.map((plan) => {
-              const Icon = planIcons[plan.id as keyof typeof planIcons] || Zap;
-              const isCurrent = plan.id === subscription?.plan_id;
-              const isPro = plan.id === 'pro';
+              const Icon = planIcons[plan.plan_id as keyof typeof planIcons] || Zap;
+              const isCurrent = plan.plan_id === subscription?.plan_id;
+              const isPro = plan.plan_id === 'pro';
 
               return (
                 <Card
-                  key={plan.id}
+                  key={plan.plan_id}
                   className={cn(
                     'relative',
                     isPro && 'border-primary shadow-lg',
@@ -244,36 +199,36 @@ const SubscriptionPage = () => {
                     <div className="mx-auto p-3 bg-primary/10 rounded-lg w-fit mb-2">
                       <Icon className="h-6 w-6 text-primary" />
                     </div>
-                    <CardTitle>{plan.name}</CardTitle>
+                    <CardTitle>{plan.plan_tier}</CardTitle>
                     <div className="mt-2">
-                      <span className="text-3xl font-bold text-foreground">INR {plan.price}</span>
+                      <span className="text-lg font-semibold text-foreground text-center bg">Rs. {plan.price} / Month</span>
                       {/* <span className="text-muted-foreground">/{plan.interval}</span> */}
                     </div>
                   </CardHeader>
                   <CardContent>
                     <ul className="space-y-3 mb-6">
-                      
-                        <li  className="flex items-start gap-2">
-                          <CheckCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-                          <span className="text-sm text-foreground">Max Projects: {plan?.max_projects}</span>
-                        </li>
-                        <li  className="flex items-start gap-2">
-                          <CheckCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-                          <span className="text-sm text-foreground">Task Per Project: {plan?.task_per_day}</span>
-                        </li>
-                        <li  className="flex items-start gap-2">
-                          <CheckCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-                          <span className="text-sm text-foreground">Export Allowed: {plan?.export_allowed ? 'Yes' : 'No'}</span>
-                        </li>
-                      
+
+                      <li className="flex items-start gap-2">
+                        <CheckCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                        <span className="text-sm text-foreground">Max Projects: {plan?.max_projects}</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <CheckCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                        <span className="text-sm text-foreground">Task Per Project: {plan?.task_per_day}</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <CheckCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                        <span className="text-sm text-foreground">Export Allowed: {plan?.export_allowed ? 'Yes' : 'No'}</span>
+                      </li>
+
                     </ul>
                     <Button
                       className="w-full"
                       variant={isCurrent ? 'outline' : isPro ? 'default' : 'outline'}
-                      disabled={isCurrent || isUpgrading === plan.id}
-                      onClick={() => handleUpgrade(plan.id)}
+                      disabled={isCurrent || isUpgrading === plan.plan_id}
+                      onClick={() => handleUpgrade(plan.plan_id)}
                     >
-                      {isUpgrading === plan.id && <LoadingSpinner size="sm" className="mr-2" />}
+                      {isUpgrading === plan.plan_id && <LoadingSpinner size="sm" className="mr-2" />}
                       {isCurrent ? 'Current Plan' : plan.price === 0 ? 'Downgrade' : 'Upgrade'}
                     </Button>
                   </CardContent>
@@ -281,9 +236,9 @@ const SubscriptionPage = () => {
               );
             })}
           </div>
-        </div>
-      </div>
-    </DashboardLayout>
+        </div >
+      </div >
+    </DashboardLayout >
   );
 };
 

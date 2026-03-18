@@ -16,28 +16,6 @@ import {
 } from 'lucide-react';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 
-// Mock data for demo purposes
-const mockUsage: Usage = {
-  projects_used: 5,
-  projects_limit: 10,
-  tasks_used: 47,
-  tasks_limit: 100,
-  storage_used: 256,
-  storage_limit: 1024,
-};
-
-const mockSubscription: Subscription = {
-  id: '1',
-  plan_id: 'pro',
-  plan_name: 'Professional',
-  status: 'Active',
-  current_period_start: '2024-01-01',
-  current_period_end: '2024-02-01',
-  features: ['Unlimited projects', 'Unlimited tasks', 'Advanced analytics'],
-  max_projects: -1,
-  task_per_day: -1,
-  export_allowed: true,
-};
 
 const DashboardPage = () => {
   const [usage, setUsage] = useState<Usage | null>(null);
@@ -53,13 +31,12 @@ const DashboardPage = () => {
         ]);
 
         // Use mock data if API fails (for demo)
-        setUsage(usageRes.data || mockUsage);
-        setSubscription(subRes.data || mockSubscription);
+        setUsage(usageRes.data);
+        setSubscription(subRes.data);
       } catch (error) {
         console.error('Failed to fetch dashboard data:', error);
         // Fallback to mock data on error
-        setUsage(mockUsage);
-        setSubscription(mockSubscription);
+        // setUsage(mockUsage);
       } finally {
         setIsLoading(false);
       }
@@ -78,40 +55,40 @@ const DashboardPage = () => {
     );
   }
 
-  const projectProgress = usage ? (usage.projects_used / usage.projects_limit) * 100 : 0;
-  const taskProgress = usage ? (usage.tasks_used / usage.tasks_limit) * 100 : 0;
+  const projectProgress = usage ? (usage.projects_count / usage.project_limit) * 100 : 0;
+  const taskProgress = usage ? (usage.tasks_count / usage.task_limit) * 100 : 0;
 
   const stats = [
     {
       title: 'Active Projects',
-      value: usage?.projects_used || 0,
-      limit: usage?.projects_limit,
+      value: usage?.projects_count,
+      limit: usage?.project_limit,
       icon: FolderKanban,
       color: 'text-chart-1',
       bgColor: 'bg-chart-1/10',
     },
     {
       title: 'Total Tasks',
-      value: usage?.tasks_used || 0,
-      limit: usage?.tasks_limit,
+      value: usage?.tasks_count,
+      limit: usage?.task_limit,
       icon: CheckCircle,
       color: 'text-chart-2',
       bgColor: 'bg-chart-2/10',
     },
     {
       title: 'In Progress',
-      value: 12,
+      value: usage?.tasks_in_progress_count || 0,
       icon: Clock,
       color: 'text-chart-4',
       bgColor: 'bg-chart-4/10',
     },
-    {
-      title: 'Completed Today',
-      value: 8,
-      icon: TrendingUp,
-      color: 'text-primary',
-      bgColor: 'bg-primary/10',
-    },
+    // {
+    //   title: 'Completed Today',
+    //   value: 8,
+    //   icon: TrendingUp,
+    //   color: 'text-primary',
+    //   bgColor: 'bg-primary/10',
+    // },
   ];
 
   return (
@@ -177,7 +154,7 @@ const DashboardPage = () => {
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Projects</span>
                   <span className="font-medium text-foreground">
-                    {usage?.projects_used} / {usage?.projects_limit}
+                    {usage?.projects_count} / {usage?.project_limit}
                   </span>
                 </div>
                 <Progress value={projectProgress} className="h-2" />
@@ -187,24 +164,13 @@ const DashboardPage = () => {
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Tasks</span>
                   <span className="font-medium text-foreground">
-                    {usage?.tasks_used} / {usage?.tasks_limit}
+                    {usage?.tasks_count} / {usage?.task_limit}
                   </span>
                 </div>
                 <Progress value={taskProgress} className="h-2" />
               </div>
 
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Storage</span>
-                  <span className="font-medium text-foreground">
-                    {usage?.storage_used} MB / {usage?.storage_limit} MB
-                  </span>
-                </div>
-                <Progress
-                  value={usage ? (usage.storage_used / usage.storage_limit) * 100 : 0}
-                  className="h-2"
-                />
-              </div>
+
             </CardContent>
           </Card>
 
