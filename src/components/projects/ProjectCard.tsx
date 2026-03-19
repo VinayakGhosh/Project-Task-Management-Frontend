@@ -17,9 +17,9 @@ interface ProjectCardProps {
 }
 
 const ProjectCard = ({ project, onEdit, onDelete }: ProjectCardProps) => {
-  const taskCount = project.task_count ?? 0;
-  const completedCount = project.completed_task_count ?? 0;
-  const progress = taskCount > 0 ? Math.round((completedCount / taskCount) * 100) : 0;
+  // const taskCount = project.task_count ?? 0;
+  // const completedCount = project.completed_task_count ?? 0;
+  // const progress = taskCount > 0 ? Math.round((completedCount / taskCount) * 100) : 0;
 
   return (
     <Card className="group hover:shadow-lg transition-shadow">
@@ -31,7 +31,7 @@ const ProjectCard = ({ project, onEdit, onDelete }: ProjectCardProps) => {
           <div>
             <CardTitle className="text-lg">
               <Link
-                to={`/projects/${project.id}`}
+                to={`/projects/${project.project_id}`}
                 className="hover:text-primary transition-colors"
               >
                 {project.name}
@@ -70,7 +70,10 @@ const ProjectCard = ({ project, onEdit, onDelete }: ProjectCardProps) => {
             {project.description}
           </p>
         )}
-        <div className="space-y-3">
+
+        {/* Progressbar logic is here */}
+
+        {/* <div className="space-y-3">
           <div className="flex items-center justify-between text-sm">
             <div className="flex items-center gap-2 text-muted-foreground">
               <CheckCircle className="h-4 w-4" />
@@ -84,9 +87,10 @@ const ProjectCard = ({ project, onEdit, onDelete }: ProjectCardProps) => {
               style={{ width: `${progress}%` }}
             />
           </div>
-        </div>
+        </div> */}
+
         <div className="mt-4">
-          <Link to={`/projects/${project.id}`}>
+          <Link to={`/projects/${project.project_id}`}>
             <Button variant="outline" className="w-full">
               View Project
             </Button>

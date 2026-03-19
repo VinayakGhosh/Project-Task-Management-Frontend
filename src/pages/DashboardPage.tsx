@@ -104,8 +104,8 @@ const DashboardPage = () => {
           </div>
           <Link to="/projects">
             <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              New Project
+
+              Create Project
             </Button>
           </Link>
         </div>

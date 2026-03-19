@@ -113,24 +113,24 @@ export const authApi = {
 
 // Projects endpoints
 export const projectsApi = {
-  getAll: () => apiRequest<Project[]>('/projects'),
+  getAll: () => apiRequest<Project[]>('/v1/project/'),
 
-  getById: (id: string) => apiRequest<Project>(`/projects/${id}`),
+  getById: (id: string) => apiRequest<Project>(`/v1/project/?project_id=${id}`),
 
   create: (data: { name: string; description?: string }) =>
-    apiRequest<Project>('/projects', {
+    apiRequest<Project>('/v1/project/', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
 
   update: (id: string, data: Partial<Project>) =>
-    apiRequest<Project>(`/projects/${id}`, {
+    apiRequest<Project>(`/v1/project/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     }),
 
   delete: (id: string) =>
-    apiRequest<void>(`/projects/${id}`, {
+    apiRequest<void>(`/v1/project/${id}`, {
       method: 'DELETE',
     }),
 };
@@ -183,13 +183,13 @@ export interface User {
 }
 
 export interface Project {
-  id: string;
+  project_id: string;
   name: string;
   description?: string;
   created_at: string;
   updated_at: string;
-  task_count?: number;
-  completed_task_count?: number;
+  // task_count?: number;
+  // completed_task_count?: number;
 }
 
 export interface Task {

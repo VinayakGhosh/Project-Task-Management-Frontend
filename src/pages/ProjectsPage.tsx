@@ -18,36 +18,6 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
-// Mock data for demo
-const mockProjects: Project[] = [
-  {
-    id: '1',
-    name: 'Website Redesign',
-    description: 'Complete overhaul of the company website with modern design',
-    created_at: '2024-01-01',
-    updated_at: '2024-01-15',
-    task_count: 12,
-    completed_task_count: 8,
-  },
-  {
-    id: '2',
-    name: 'Mobile App Development',
-    description: 'Build iOS and Android apps for the platform',
-    created_at: '2024-01-05',
-    updated_at: '2024-01-20',
-    task_count: 24,
-    completed_task_count: 10,
-  },
-  {
-    id: '3',
-    name: 'Marketing Campaign Q1',
-    description: 'Plan and execute Q1 marketing initiatives',
-    created_at: '2024-01-10',
-    updated_at: '2024-01-18',
-    task_count: 8,
-    completed_task_count: 8,
-  },
-];
 
 const ProjectsPage = () => {
   const { toast } = useToast();
@@ -62,9 +32,6 @@ const ProjectsPage = () => {
     const { data, error } = await projectsApi.getAll();
     if (data) {
       setProjects(data);
-    } else if (error) {
-      // Use mock data for demo
-      setProjects(mockProjects);
     }
     setIsLoading(false);
   };
@@ -82,38 +49,24 @@ const ProjectsPage = () => {
       setProjects([newProject, ...projects]);
       setModalOpen(false);
       toast({ title: 'Project created successfully' });
-    } else if (error) {
-      // Demo: add mock project
-      const mockProject: Project = {
-        id: Date.now().toString(),
-        name: data.name,
-        description: data.description,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        task_count: 0,
-        completed_task_count: 0,
-      };
-      setProjects([mockProject, ...projects]);
-      setModalOpen(false);
-      toast({ title: 'Project created successfully' });
     }
   };
 
   const handleEdit = async (data: { name: string; description?: string }) => {
     if (!editingProject) return;
     setIsSubmitting(true);
-    const { data: updatedProject, error } = await projectsApi.update(editingProject.id, data);
+    const { data: updatedProject, error } = await projectsApi.update(editingProject.project_id, data);
     setIsSubmitting(false);
 
     if (updatedProject) {
-      setProjects(projects.map((p) => (p.id === editingProject.id ? updatedProject : p)));
+      setProjects(projects.map((p) => (p.project_id === editingProject.project_id ? updatedProject : p)));
       setEditingProject(null);
       toast({ title: 'Project updated successfully' });
     } else if (error) {
       // Demo: update locally
       setProjects(
         projects.map((p) =>
-          p.id === editingProject.id ? { ...p, ...data, updated_at: new Date().toISOString() } : p
+          p.project_id === editingProject.project_id ? { ...p, ...data, updated_at: new Date().toISOString() } : p
         )
       );
       setEditingProject(null);
@@ -123,10 +76,10 @@ const ProjectsPage = () => {
 
   const handleDelete = async () => {
     if (!deletingProject) return;
-    const { error } = await projectsApi.delete(deletingProject.id);
+    const { error } = await projectsApi.delete(deletingProject.project_id);
 
     // Demo: always delete locally
-    setProjects(projects.filter((p) => p.id !== deletingProject.id));
+    setProjects(projects.filter((p) => p.project_id !== deletingProject.project_id));
     setDeletingProject(null);
     toast({ title: 'Project deleted successfully' });
   };
@@ -177,7 +130,7 @@ const ProjectsPage = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {projects.map((project) => (
               <ProjectCard
-                key={project.id}
+                key={project.project_id}
                 project={project}
                 onEdit={(p) => setEditingProject(p)}
                 onDelete={(p) => setDeletingProject(p)}
