@@ -49,6 +49,9 @@ const ProjectsPage = () => {
       setProjects([newProject, ...projects]);
       setModalOpen(false);
       toast({ title: 'Project created successfully' });
+    } if (error) {
+      console.log('error is', error)
+      toast({ title: error });
     }
   };
 
