@@ -188,8 +188,8 @@ export interface Project {
   description?: string;
   created_at: string;
   updated_at: string;
-  // task_count?: number;
-  // completed_task_count?: number;
+  total_tasks: number;
+  completed_tasks: number;
 }
 
 export interface Task {
