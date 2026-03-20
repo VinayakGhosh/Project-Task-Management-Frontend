@@ -35,7 +35,8 @@ const SubscriptionPage = () => {
 
       setSubscription(subRes.data);
       setUsage(usageRes.data);
-      setPlans(plansRes.data);
+      const sortedPlans = plansRes.data.sort((a: Plan, b: Plan) => a.price - b.price);
+      setPlans(sortedPlans);
       setIsLoading(false);
     };
 
@@ -106,9 +107,12 @@ const SubscriptionPage = () => {
                     <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
                       {subscription?.status}
                     </Badge>
-                    <span className="text-sm text-muted-foreground">
-                      ${currentPlan.price}/month
-                    </span>
+                    {currentPlan.price > 0 &&(
+                      <span className="text-sm text-muted-foreground">
+                        Rs {currentPlan.price}/month
+                      </span>
+                    )}
+                    
                   </div>
                 </div>
               </div>
@@ -174,22 +178,18 @@ const SubscriptionPage = () => {
             {plans.map((plan) => {
               const Icon = planIcons[plan.plan_id as keyof typeof planIcons] || Zap;
               const isCurrent = plan.plan_id === subscription?.plan_id;
-              const isPro = plan.plan_id === 'pro';
+              const isCheaperThanCurrent = currentPlan && plan.price < currentPlan.price;
+              const isDisabled = isCurrent || isCheaperThanCurrent || isUpgrading === plan.plan_id;
 
               return (
                 <Card
                   key={plan.plan_id}
                   className={cn(
-                    'relative',
-                    isPro && 'border-primary shadow-lg',
-                    isCurrent && 'ring-2 ring-primary'
+                    'relative transition-all',
+                    isCurrent && 'ring-2 ring-primary',
+                    isCheaperThanCurrent && 'opacity-70'
                   )}
                 >
-                  {isPro && !isCurrent && (
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                      <Badge className="bg-primary text-primary-foreground">Most Popular</Badge>
-                    </div>
-                  )}
                   {isCurrent && (
                     <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                       <Badge className="bg-primary text-primary-foreground">Current Plan</Badge>
@@ -201,7 +201,12 @@ const SubscriptionPage = () => {
                     </div>
                     <CardTitle>{plan.plan_tier}</CardTitle>
                     <div className="mt-2">
-                      <span className="text-lg font-semibold text-foreground text-center bg">Rs. {plan.price} / Month</span>
+                      {plan.price > 0 ? (
+                        <span className="text-lg font-semibold text-foreground text-center bg">Rs. {plan.price} / Month</span>
+                      ): (
+                        <p className='mt-5 text-lg font-semibold text-foreground text-center bg'></p>
+                      )
+                    }
                       {/* <span className="text-muted-foreground">/{plan.interval}</span> */}
                     </div>
                   </CardHeader>
@@ -223,13 +228,16 @@ const SubscriptionPage = () => {
 
                     </ul>
                     <Button
-                      className="w-full"
-                      variant={isCurrent ? 'outline' : isPro ? 'default' : 'outline'}
-                      disabled={isCurrent || isUpgrading === plan.plan_id}
+                      className={cn(
+                        "w-full",
+                        isCheaperThanCurrent && "cursor-not-allowed"
+                      )}
+                      variant={isCurrent ? 'outline' : 'default'}
+                      disabled={isDisabled}
                       onClick={() => handleUpgrade(plan.plan_id)}
                     >
                       {isUpgrading === plan.plan_id && <LoadingSpinner size="sm" className="mr-2" />}
-                      {isCurrent ? 'Current Plan' : plan.price === 0 ? 'Downgrade' : 'Upgrade'}
+                      {isCurrent ? 'Current Plan' : isCheaperThanCurrent ? 'Downgrade Not Allowed' : 'Upgrade'}
                     </Button>
                   </CardContent>
                 </Card>
