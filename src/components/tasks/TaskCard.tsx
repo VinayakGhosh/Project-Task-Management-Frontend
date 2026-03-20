@@ -28,8 +28,9 @@ const priorityConfig = {
 
 const statusConfig = {
   todo: { label: 'To Do', className: 'bg-muted text-muted-foreground' },
-  in_progress: { label: 'In Progress', className: 'bg-chart-1/20 text-chart-1' },
-  completed: { label: 'Completed', className: 'bg-primary/20 text-primary' },
+  in_progress: { label: 'In Progress', className: 'bg-blue-500/20 text-blue-500' },
+  in_review: { label: 'In Review', className: 'bg-orange-500/20 text-orange-500' },
+  completed: { label: 'Completed', className: 'bg-green-500/20 text-green-500' },
 };
 
 const TaskCard = ({ task, onEdit, onDelete, onStatusChange }: TaskCardProps) => {
