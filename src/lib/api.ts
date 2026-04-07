@@ -1,7 +1,8 @@
 // API utility module for handling all requests
 
 // const API_BASE_URL = import.meta.env.VITE_API_URL
-const API_BASE_URL = "http://65.2.144.240/api/";
+// const API_BASE_URL = "http://65.2.144.240/api/";
+const API_BASE_URL = "http://localhost:8000";
 
 interface ApiResponse<T> {
   data?: T;
@@ -40,6 +41,10 @@ const handleResponse = async <T>(response: Response): Promise<ApiResponse<T>> =>
       return { error: 'Session expired. Please login again.' };
     }
     // If on login page, let the standard error handling deal with it
+  }
+
+  if (response.status === 204) {
+    return { data: undefined as T };
   }
 
   if (!response.ok) {
@@ -124,7 +129,7 @@ export const projectsApi = {
       body: JSON.stringify(data),
     }),
 
-  update: (id: string, data: Partial<Project>) =>
+  update: (id: string, data: { name?: string; description?: string }) =>
     apiRequest<Project>(`/v1/project/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
@@ -136,26 +141,54 @@ export const projectsApi = {
     }),
 };
 
-// Tasks endpoints
-export const tasksApi = {
-  getByProject: (projectId: string) => apiRequest<Task[]>(`/projects/${projectId}/tasks`),
+// Project Status endpoints
+export const projectStatusApi = {
+  getAll: (projectId: string) =>
+    apiRequest<ProjectStatus[]>(`/v1/project/${projectId}/statuses`),
 
-  getById: (id: string) => apiRequest<Task>(`/v1/tasks/${id}`),
-
-  create: (data: { title: string; description?: string; project_id: string; priority?: string; deadline?: string }) =>
-    apiRequest<Task>('/v1/tasks', {
+  create: (projectId: string, data: { name: string; description?: string }) =>
+    apiRequest<ProjectStatus>(`/v1/project/${projectId}/statuses`, {
       method: 'POST',
       body: JSON.stringify(data),
     }),
 
-  update: (id: string, data: Partial<Task>) =>
+  update: (projectId: string, statusId: string, data: { name?: string; description?: string }) =>
+    apiRequest<ProjectStatus>(`/v1/project/${projectId}/statuses/${statusId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  delete: (projectId: string, statusId: string) =>
+    apiRequest<void>(`/v1/project/${projectId}/statuses/${statusId}`, {
+      method: 'DELETE',
+    }),
+};
+
+// Tasks endpoints
+export const tasksApi = {
+  getByProject: (projectId: string) =>
+    apiRequest<Task[]>(`/v1/tasks/?project_id=${projectId}`),
+
+  create: (data: { project_id: string; name: string; description?: string }) =>
+    apiRequest<Task>('/v1/tasks/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (id: string, data: { name?: string; description?: string }) =>
     apiRequest<Task>(`/v1/tasks/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     }),
 
+  updateStatus: (id: string, status_id: string) =>
+    apiRequest<Task>(`/v1/tasks/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status_id }),
+    }),
+
   delete: (id: string) =>
-    apiRequest<void>(`/tasks/${id}`, {
+    apiRequest<void>(`/v1/tasks/${id}`, {
       method: 'DELETE',
     }),
 };
@@ -193,14 +226,24 @@ export interface Project {
   completed_tasks: number;
 }
 
-export interface Task {
-  id: string;
-  title: string;
-  description?: string;
-  status: 'todo' | 'in_progress' | 'in_review' | 'completed';
-  priority: 'low' | 'medium' | 'high';
-  deadline?: string;
+export interface ProjectStatus {
+  status_id: string;
   project_id: string;
+  name: string;
+  description?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Task {
+  task_id: string;
+  project_id: string;
+  name: string;
+  description?: string;
+  status_id: string | null;
+  status_name?: string | null;
+  created_by: string;
+  assigned_to?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -236,5 +279,4 @@ export interface Usage {
   tasks_pending_count: number;
   task_limit: number;
   project_limit: number;
-
 }

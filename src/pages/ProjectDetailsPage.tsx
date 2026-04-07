@@ -1,11 +1,29 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverEvent,
+  DragOverlay,
+  DragStartEvent,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  closestCorners,
+  useDroppable,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { projectsApi, tasksApi, Project, Task } from '@/lib/api';
-import { ArrowLeft, Plus, CheckCircle, Clock, ListTodo, AlertCircle } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { projectsApi, projectStatusApi, tasksApi, Project, Task, ProjectStatus } from '@/lib/api';
+import { ArrowLeft, Plus, Settings2, Trash2, Pencil, X, Check, AlertTriangle } from 'lucide-react';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import TaskCard from '@/components/tasks/TaskCard';
 import TaskModal from '@/components/tasks/TaskModal';
@@ -21,202 +39,352 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
+import { cn } from '@/lib/utils';
 
-// Mock data for demo
-const mockProject: Project = {
-  id: '1',
-  name: 'Website Redesign',
-  description: 'Complete overhaul of the company website with modern design patterns and improved user experience.',
-  created_at: '2024-01-01',
-  updated_at: '2024-01-15',
-  task_count: 12,
-  completed_task_count: 8,
+const MAX_STATUSES = 6;
+
+const COLUMN_BORDER_COLORS = [
+  'border-slate-400',
+  'border-blue-500',
+  'border-violet-500',
+  'border-amber-500',
+  'border-orange-500',
+  'border-green-500',
+];
+
+const COLUMN_COUNT_COLORS = [
+  'bg-slate-500/10 text-slate-600',
+  'bg-blue-500/10 text-blue-600',
+  'bg-violet-500/10 text-violet-600',
+  'bg-amber-500/10 text-amber-600',
+  'bg-orange-500/10 text-orange-600',
+  'bg-green-500/10 text-green-600',
+];
+
+// Sortable task wrapper for dnd-kit
+const SortableTaskCard = ({
+  task,
+  statuses,
+  onEdit,
+  onDelete,
+  onStatusChange,
+}: {
+  task: Task;
+  statuses: ProjectStatus[];
+  onEdit: (t: Task) => void;
+  onDelete: (t: Task) => void;
+  onStatusChange: (t: Task, statusId: string) => void;
+}) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: task.task_id,
+    data: { type: 'task', task },
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="touch-none">
+      <TaskCard
+        task={task}
+        statuses={statuses}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        onStatusChange={onStatusChange}
+      />
+    </div>
+  );
 };
 
-const mockTasks: Task[] = [
-  {
-    id: '1',
-    title: 'Design homepage mockup',
-    description: 'Create Figma designs for the new homepage layout',
-    status: 'completed',
-    priority: 'high',
-    deadline: '2024-01-10',
-    project_id: '1',
-    created_at: '2024-01-01',
-    updated_at: '2024-01-10',
-  },
-  {
-    id: '2',
-    title: 'Implement responsive navigation',
-    description: 'Build mobile-friendly navigation component',
-    status: 'in_progress',
-    priority: 'high',
-    deadline: '2024-01-20',
-    project_id: '1',
-    created_at: '2024-01-05',
-    updated_at: '2024-01-15',
-  },
-  {
-    id: '3',
-    title: 'Set up analytics tracking',
-    description: 'Integrate Google Analytics and event tracking',
-    status: 'todo',
-    priority: 'medium',
-    deadline: '2024-01-25',
-    project_id: '1',
-    created_at: '2024-01-08',
-    updated_at: '2024-01-08',
-  },
-  {
-    id: '4',
-    title: 'Optimize images for web',
-    description: 'Compress and convert images to WebP format',
-    status: 'todo',
-    priority: 'low',
-    project_id: '1',
-    created_at: '2024-01-10',
-    updated_at: '2024-01-10',
-  },
-];
+// Droppable column wrapper
+const DroppableColumn = ({
+  statusId,
+  children,
+}: {
+  statusId: string;
+  children: React.ReactNode;
+}) => {
+  const { setNodeRef, isOver } = useDroppable({
+    id: statusId,
+    data: { type: 'column', statusId },
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        'flex-1 space-y-2.5 overflow-y-auto pr-1 transition-colors rounded-lg',
+        isOver && 'bg-accent/50'
+      )}
+      style={{ minHeight: '520px', maxHeight: '520px' }}
+    >
+      {children}
+    </div>
+  );
+};
 
 const ProjectDetailsPage = () => {
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
+
   const [project, setProject] = useState<Project | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [statuses, setStatuses] = useState<ProjectStatus[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [deletingTask, setDeletingTask] = useState<Task | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const fetchData = async () => {
-    if (!id) return;
+  // Status management panel
+  const [statusPanelOpen, setStatusPanelOpen] = useState(false);
+  const [newStatusName, setNewStatusName] = useState('');
+  const [editingStatus, setEditingStatus] = useState<ProjectStatus | null>(null);
+  const [editingStatusName, setEditingStatusName] = useState('');
+  const [deletingStatus, setDeletingStatus] = useState<ProjectStatus | null>(null);
+  const [statusSubmitting, setStatusSubmitting] = useState(false);
 
-    const [projectRes, tasksRes] = await Promise.all([
+  // Drag state
+  const [activeTask, setActiveTask] = useState<Task | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  );
+
+  const fetchData = useCallback(async () => {
+    if (!id) return;
+    setIsLoading(true);
+
+    const [projectRes, tasksRes, statusesRes] = await Promise.all([
       projectsApi.getById(id),
       tasksApi.getByProject(id),
+      projectStatusApi.getAll(id),
     ]);
 
-    setProject(projectRes.data || mockProject);
-    setTasks(tasksRes.data || mockTasks);
+    if (projectRes.error || !projectRes.data) {
+      setIsLoading(false);
+      return;
+    }
+
+    setProject(projectRes.data);
+    setStatuses(statusesRes.data || []);
+    setTasks(tasksRes.data || []);
     setIsLoading(false);
-  };
+  }, [id]);
 
   useEffect(() => {
     fetchData();
-  }, [id]);
+  }, [fetchData]);
 
-  const handleCreateTask = async (data: {
-    title: string;
-    description?: string;
-    priority?: string;
-    status?: string;
-    deadline?: string;
-  }) => {
+  // ── Task CRUD ──────────────────────────────────────────────────────────────
+
+  const handleCreateTask = async (data: { name: string; description?: string }) => {
     if (!id) return;
     setIsSubmitting(true);
 
     const { data: newTask, error } = await tasksApi.create({
-      ...data,
       project_id: id,
+      name: data.name,
+      description: data.description,
     });
 
     setIsSubmitting(false);
 
     if (newTask) {
-      setTasks([newTask, ...tasks]);
+      setTasks((prev) => [newTask, ...prev]);
       setModalOpen(false);
-      toast({ title: 'Task created successfully' });
-    } else if (error) {
-      // Demo: add mock task
-      const mockTask: Task = {
-        id: Date.now().toString(),
-        title: data.title,
-        description: data.description,
-        status: (data.status as Task['status']) || 'todo',
-        priority: (data.priority as Task['priority']) || 'medium',
-        deadline: data.deadline,
-        project_id: id,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      setTasks([mockTask, ...tasks]);
-      setModalOpen(false);
-      toast({ title: 'Task created successfully' });
+      toast({ title: 'Task created' });
+    } else {
+      toast({ title: 'Failed to create task', description: error, variant: 'destructive' });
     }
   };
 
-  const handleEditTask = async (data: {
-    title: string;
-    description?: string;
-    priority?: string;
-    status?: string;
-    deadline?: string;
-  }) => {
+  const handleEditTask = async (data: { name: string; description?: string }) => {
     if (!editingTask) return;
     setIsSubmitting(true);
 
-    const updatePayload: Partial<Task> = {
-      title: data.title,
+    const { data: updatedTask, error } = await tasksApi.update(editingTask.task_id, {
+      name: data.name,
       description: data.description,
-      priority: data.priority as Task['priority'],
-      status: data.status as Task['status'],
-      deadline: data.deadline,
-    };
-
-    const { data: updatedTask, error } = await tasksApi.update(editingTask.id, updatePayload);
+    });
 
     setIsSubmitting(false);
 
     if (updatedTask) {
-      setTasks(tasks.map((t) => (t.id === editingTask.id ? updatedTask : t)));
+      setTasks((prev) => prev.map((t) => (t.task_id === editingTask.task_id ? updatedTask : t)));
       setEditingTask(null);
-      toast({ title: 'Task updated successfully' });
-    } else if (error) {
-      // Demo: update locally
-      setTasks(
-        tasks.map((t) =>
-          t.id === editingTask.id
-            ? { ...t, ...data, updated_at: new Date().toISOString() } as Task
-            : t
-        )
-      );
-      setEditingTask(null);
-      toast({ title: 'Task updated successfully' });
+      toast({ title: 'Task updated' });
+    } else {
+      toast({ title: 'Failed to update task', description: error, variant: 'destructive' });
     }
   };
 
   const handleDeleteTask = async () => {
     if (!deletingTask) return;
-    await tasksApi.delete(deletingTask.id);
+    const { error } = await tasksApi.delete(deletingTask.task_id);
 
-    // Demo: always delete locally
-    setTasks(tasks.filter((t) => t.id !== deletingTask.id));
+    if (!error) {
+      setTasks((prev) => prev.filter((t) => t.task_id !== deletingTask.task_id));
+      toast({ title: 'Task deleted' });
+    } else {
+      toast({ title: 'Failed to delete task', description: error, variant: 'destructive' });
+    }
     setDeletingTask(null);
-    toast({ title: 'Task deleted successfully' });
   };
 
-  const handleStatusChange = async (task: Task, status: Task['status']) => {
-    const { data: updatedTask, error } = await tasksApi.update(task.id, { status });
+  const handleStatusChange = async (task: Task, statusId: string) => {
+    // Optimistic update
+    setTasks((prev) =>
+      prev.map((t) => {
+        if (t.task_id !== task.task_id) return t;
+        const newStatus = statuses.find((s) => s.status_id === statusId);
+        return { ...t, status_id: statusId, status_name: newStatus?.name ?? t.status_name };
+      })
+    );
 
-    if (updatedTask) {
-      setTasks(tasks.map((t) => (t.id === task.id ? updatedTask : t)));
-    } else {
-      // Demo: update locally
-      setTasks(
-        tasks.map((t) =>
-          t.id === task.id ? { ...t, status, updated_at: new Date().toISOString() } : t
-        )
+    const { error } = await tasksApi.updateStatus(task.task_id, statusId);
+    if (error) {
+      // Revert
+      setTasks((prev) => prev.map((t) => (t.task_id === task.task_id ? task : t)));
+      toast({ title: 'Failed to update status', description: error, variant: 'destructive' });
+    }
+  };
+
+  // ── Drag and Drop ──────────────────────────────────────────────────────────
+
+  const handleDragStart = (event: DragStartEvent) => {
+    const task = tasks.find((t) => t.task_id === event.active.id);
+    if (task) setActiveTask(task);
+  };
+
+  const handleDragOver = (event: DragOverEvent) => {
+    const { active, over } = event;
+    if (!over) return;
+
+    const activeTask = tasks.find((t) => t.task_id === active.id);
+    if (!activeTask) return;
+
+    // Dropped over a column (status_id as droppable id)
+    const overStatus = statuses.find((s) => s.status_id === over.id);
+    if (overStatus && activeTask.status_id !== overStatus.status_id) {
+      setTasks((prev) =>
+        prev.map((t) => {
+          if (t.task_id !== activeTask.task_id) return t;
+          return { ...t, status_id: overStatus.status_id, status_name: overStatus.name };
+        })
+      );
+    }
+
+    // Dropped over another task
+    const overTask = tasks.find((t) => t.task_id === over.id);
+    if (overTask && overTask.status_id !== activeTask.status_id) {
+      setTasks((prev) =>
+        prev.map((t) => {
+          if (t.task_id !== activeTask.task_id) return t;
+          const targetStatus = statuses.find((s) => s.status_id === overTask.status_id);
+          return { ...t, status_id: overTask.status_id, status_name: targetStatus?.name ?? t.status_name };
+        })
       );
     }
   };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveTask(null);
+    if (!over) return;
+
+    const dragged = tasks.find((t) => t.task_id === active.id);
+    if (!dragged) return;
+
+    // Determine the target status_id
+    let targetStatusId: string | null = null;
+    const overStatus = statuses.find((s) => s.status_id === over.id);
+    if (overStatus) {
+      targetStatusId = overStatus.status_id;
+    } else {
+      const overTask = tasks.find((t) => t.task_id === over.id);
+      if (overTask) targetStatusId = overTask.status_id;
+    }
+
+    if (targetStatusId && targetStatusId !== dragged.status_id) {
+      // Persist the status change
+      const { error } = await tasksApi.updateStatus(dragged.task_id, targetStatusId);
+      if (error) {
+        toast({ title: 'Failed to move task', description: error, variant: 'destructive' });
+        fetchData(); // Revert to server state
+      }
+    }
+  };
+
+  // ── Status CRUD ────────────────────────────────────────────────────────────
+
+  const handleCreateStatus = async () => {
+    if (!id || !newStatusName.trim()) return;
+    if (statuses.length >= MAX_STATUSES) return;
+    setStatusSubmitting(true);
+
+    const { data: created, error } = await projectStatusApi.create(id, { name: newStatusName.trim() });
+    setStatusSubmitting(false);
+
+    if (created) {
+      setStatuses((prev) => [...prev, created]);
+      setNewStatusName('');
+      toast({ title: `Status "${created.name}" created` });
+    } else {
+      toast({ title: 'Failed to create status', description: error, variant: 'destructive' });
+    }
+  };
+
+  const handleUpdateStatus = async () => {
+    if (!id || !editingStatus || !editingStatusName.trim()) return;
+    setStatusSubmitting(true);
+
+    const { data: updated, error } = await projectStatusApi.update(id, editingStatus.status_id, {
+      name: editingStatusName.trim(),
+    });
+    setStatusSubmitting(false);
+
+    if (updated) {
+      setStatuses((prev) => prev.map((s) => (s.status_id === updated.status_id ? updated : s)));
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.status_id === updated.status_id ? { ...t, status_name: updated.name } : t
+        )
+      );
+      setEditingStatus(null);
+      toast({ title: 'Status updated' });
+    } else {
+      toast({ title: 'Failed to update status', description: error, variant: 'destructive' });
+    }
+  };
+
+  const handleDeleteStatus = async () => {
+    if (!id || !deletingStatus) return;
+    const { error } = await projectStatusApi.delete(id, deletingStatus.status_id);
+
+    if (!error) {
+      setStatuses((prev) => prev.filter((s) => s.status_id !== deletingStatus.status_id));
+      toast({ title: `Status "${deletingStatus.name}" deleted` });
+    } else {
+      toast({
+        title: 'Cannot delete status',
+        description: error,
+        variant: 'destructive',
+      });
+    }
+    setDeletingStatus(null);
+  };
+
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   if (isLoading) {
     return (
@@ -244,10 +412,11 @@ const ProjectDetailsPage = () => {
     );
   }
 
-  const todoTasks = tasks.filter((t) => t.status === 'todo');
-  const inProgressTasks = tasks.filter((t) => t.status === 'in_progress');
-  const inReviewTasks = tasks.filter((t) => t.status === 'in_review');
-  const completedTasks = tasks.filter((t) => t.status === 'completed');
+  const totalTasks = tasks.length;
+  const doneTasks = statuses.length > 0
+    ? tasks.filter((t) => t.status_id === statuses[statuses.length - 1].status_id).length
+    : 0;
+  const progressPct = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
 
   return (
     <DashboardLayout>
@@ -256,204 +425,128 @@ const ProjectDetailsPage = () => {
         <div className="flex flex-col gap-4">
           <Link
             to="/projects"
-            className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors w-fit"
+            className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors w-fit text-sm"
           >
-            <ArrowLeft className="mr-2 h-4 w-4" />
+            <ArrowLeft className="mr-1.5 h-4 w-4" />
             Back to Projects
           </Link>
 
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-bold text-foreground">{project.name}</h1>
+            <div className="min-w-0">
+              <h1 className="text-2xl font-bold text-foreground truncate">{project.name}</h1>
               {project.description && (
-                <p className="text-muted-foreground mt-2 max-w-2xl">{project.description}</p>
+                <p className="text-muted-foreground mt-1 text-sm max-w-2xl">{project.description}</p>
               )}
+              {/* Progress bar */}
+              <div className="mt-3 flex items-center gap-3 max-w-xs">
+                <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-green-500 rounded-full transition-all duration-500"
+                    style={{ width: `${progressPct}%` }}
+                  />
+                </div>
+                <span className="text-xs text-muted-foreground shrink-0">
+                  {doneTasks}/{totalTasks} done
+                </span>
+              </div>
             </div>
-            <Button onClick={() => setModalOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Task
-            </Button>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button variant="outline" size="sm" onClick={() => setStatusPanelOpen(true)}>
+                <Settings2 className="mr-1.5 h-4 w-4" />
+                Statuses
+              </Button>
+              <Button size="sm" onClick={() => setModalOpen(true)}>
+                <Plus className="mr-1.5 h-4 w-4" />
+                Add Task
+              </Button>
+            </div>
           </div>
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-muted rounded-lg">
-                  <ListTodo className="h-5 w-5 text-muted-foreground" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-foreground">{todoTasks.length}</p>
-                  <p className="text-sm text-muted-foreground">To Do</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-500/10 rounded-lg">
-                  <Clock className="h-5 w-5 text-blue-500" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-foreground">{inProgressTasks.length}</p>
-                  <p className="text-sm text-muted-foreground">In Progress</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-orange-500/10 rounded-lg">
-                  <AlertCircle className="h-5 w-5 text-orange-500" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-foreground">{inReviewTasks.length}</p>
-                  <p className="text-sm text-muted-foreground">In Review</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-500/10 rounded-lg">
-                  <CheckCircle className="h-5 w-5 text-green-500" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-foreground">{completedTasks.length}</p>
-                  <p className="text-sm text-muted-foreground">Completed</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
         </div>
 
         {/* Kanban Board */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 min-h-[600px]">
-          {/* TODO Column */}
-          <div className="flex flex-col">
-            <div className="flex items-center justify-between mb-4 pb-3 border-b-2 border-muted">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-muted rounded">
-                  <ListTodo className="h-4 w-4 text-muted-foreground" />
-                </div>
-                <h3 className="font-semibold text-foreground">To Do</h3>
-                <Badge variant="secondary" className="ml-1">{todoTasks.length}</Badge>
-              </div>
-            </div>
-            <div className="flex-1 space-y-3 overflow-y-auto pr-2">
-              {todoTasks.length === 0 ? (
-                <div className="text-center py-8 text-sm text-muted-foreground">
-                  No tasks
-                </div>
-              ) : (
-                todoTasks.map((task) => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    onEdit={(t) => setEditingTask(t)}
-                    onDelete={(t) => setDeletingTask(t)}
-                    onStatusChange={handleStatusChange}
-                  />
-                ))
-              )}
-            </div>
+        {statuses.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-64 text-center gap-3">
+            <p className="text-muted-foreground">No statuses found for this project.</p>
+            <Button variant="outline" size="sm" onClick={() => setStatusPanelOpen(true)}>
+              <Settings2 className="mr-1.5 h-4 w-4" />
+              Manage Statuses
+            </Button>
           </div>
+        ) : (
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCorners}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
+            onDragEnd={handleDragEnd}
+          >
+            <div className="flex gap-4 overflow-x-auto pb-4">
+              {statuses.map((status, idx) => {
+                const columnTasks = tasks.filter((t) => t.status_id === status.status_id);
+                const borderColor = COLUMN_BORDER_COLORS[Math.min(idx, COLUMN_BORDER_COLORS.length - 1)];
+                const countColor = COLUMN_COUNT_COLORS[Math.min(idx, COLUMN_COUNT_COLORS.length - 1)];
 
-          {/* IN PROGRESS Column */}
-          <div className="flex flex-col">
-            <div className="flex items-center justify-between mb-4 pb-3 border-b-2 border-blue-500">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-blue-500/10 rounded">
-                  <Clock className="h-4 w-4 text-blue-500" />
-                </div>
-                <h3 className="font-semibold text-foreground">In Progress</h3>
-                <Badge variant="secondary" className="ml-1">{inProgressTasks.length}</Badge>
-              </div>
-            </div>
-            <div className="flex-1 space-y-3 overflow-y-auto pr-2">
-              {inProgressTasks.length === 0 ? (
-                <div className="text-center py-8 text-sm text-muted-foreground">
-                  No tasks
-                </div>
-              ) : (
-                inProgressTasks.map((task) => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    onEdit={(t) => setEditingTask(t)}
-                    onDelete={(t) => setDeletingTask(t)}
-                    onStatusChange={handleStatusChange}
-                  />
-                ))
-              )}
-            </div>
-          </div>
+                return (
+                  <div
+                    key={status.status_id}
+                    className="flex flex-col shrink-0 w-72"
+                    id={status.status_id}
+                  >
+                    {/* Column header */}
+                    <div className={cn('flex items-center justify-between mb-3 pb-3 border-b-2', borderColor)}>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold text-foreground text-sm">{status.name}</h3>
+                        <span className={cn('text-xs font-medium px-1.5 py-0.5 rounded-full', countColor)}>
+                          {columnTasks.length}
+                        </span>
+                      </div>
+                    </div>
 
-          {/* IN REVIEW Column */}
-          <div className="flex flex-col">
-            <div className="flex items-center justify-between mb-4 pb-3 border-b-2 border-orange-500">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-orange-500/10 rounded">
-                  <AlertCircle className="h-4 w-4 text-orange-500" />
-                </div>
-                <h3 className="font-semibold text-foreground">In Review</h3>
-                <Badge variant="secondary" className="ml-1">{inReviewTasks.length}</Badge>
-              </div>
+                    {/* Droppable column body */}
+                    <SortableContext
+                      items={columnTasks.map((t) => t.task_id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      <DroppableColumn statusId={status.status_id}>
+                        {columnTasks.length === 0 ? (
+                          <div className="flex items-center justify-center h-20 rounded-lg border border-dashed border-muted-foreground/25">
+                            <p className="text-xs text-muted-foreground">Drop tasks here</p>
+                          </div>
+                        ) : (
+                          columnTasks.map((task) => (
+                            <SortableTaskCard
+                              key={task.task_id}
+                              task={task}
+                              statuses={statuses}
+                              onEdit={(t) => setEditingTask(t)}
+                              onDelete={(t) => setDeletingTask(t)}
+                              onStatusChange={handleStatusChange}
+                            />
+                          ))
+                        )}
+                      </DroppableColumn>
+                    </SortableContext>
+                  </div>
+                );
+              })}
             </div>
-            <div className="flex-1 space-y-3 overflow-y-auto pr-2">
-              {inReviewTasks.length === 0 ? (
-                <div className="text-center py-8 text-sm text-muted-foreground">
-                  No tasks
-                </div>
-              ) : (
-                inReviewTasks.map((task) => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    onEdit={(t) => setEditingTask(t)}
-                    onDelete={(t) => setDeletingTask(t)}
-                    onStatusChange={handleStatusChange}
-                  />
-                ))
-              )}
-            </div>
-          </div>
 
-          {/* DONE Column */}
-          <div className="flex flex-col">
-            <div className="flex items-center justify-between mb-4 pb-3 border-b-2 border-green-500">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-green-500/10 rounded">
-                  <CheckCircle className="h-4 w-4 text-green-500" />
-                </div>
-                <h3 className="font-semibold text-foreground">Done</h3>
-                <Badge variant="secondary" className="ml-1">{completedTasks.length}</Badge>
-              </div>
-            </div>
-            <div className="flex-1 space-y-3 overflow-y-auto pr-2">
-              {completedTasks.length === 0 ? (
-                <div className="text-center py-8 text-sm text-muted-foreground">
-                  No tasks
-                </div>
-              ) : (
-                completedTasks.map((task) => (
+            {/* Drag overlay */}
+            <DragOverlay>
+              {activeTask && (
+                <div className="rotate-2 scale-105 opacity-90 pointer-events-none">
                   <TaskCard
-                    key={task.id}
-                    task={task}
-                    onEdit={(t) => setEditingTask(t)}
-                    onDelete={(t) => setDeletingTask(t)}
-                    onStatusChange={handleStatusChange}
+                    task={activeTask}
+                    statuses={statuses}
+                    onEdit={() => {}}
+                    onDelete={() => {}}
+                    onStatusChange={() => {}}
                   />
-                ))
+                </div>
               )}
-            </div>
-          </div>
-        </div>
+            </DragOverlay>
+          </DndContext>
+        )}
       </div>
 
       {/* Create/Edit Task Modal */}
@@ -468,13 +561,13 @@ const ProjectDetailsPage = () => {
         isLoading={isSubmitting}
       />
 
-      {/* Delete Confirmation */}
+      {/* Delete Task Confirmation */}
       <AlertDialog open={!!deletingTask} onOpenChange={() => setDeletingTask(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Task</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{deletingTask?.title}"? This action cannot be undone.
+              Are you sure you want to delete "{deletingTask?.name}"? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -488,6 +581,159 @@ const ProjectDetailsPage = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Delete Status Confirmation */}
+      <AlertDialog open={!!deletingStatus} onOpenChange={() => setDeletingStatus(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Status</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{deletingStatus?.name}"? This will fail if any tasks
+              are currently using this status.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteStatus}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Status Management Side Panel */}
+      <Sheet open={statusPanelOpen} onOpenChange={setStatusPanelOpen}>
+        <SheetContent className="w-full sm:max-w-md flex flex-col gap-0 p-0">
+          <SheetHeader className="px-6 py-5 border-b">
+            <SheetTitle>Manage Statuses</SheetTitle>
+          </SheetHeader>
+
+          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+            {/* Status list */}
+            <div className="space-y-2">
+              {statuses.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  No statuses yet. Add one below.
+                </p>
+              )}
+              {statuses.map((status, idx) => {
+                const borderColor = COLUMN_BORDER_COLORS[Math.min(idx, COLUMN_BORDER_COLORS.length - 1)];
+                const taskCount = tasks.filter((t) => t.status_id === status.status_id).length;
+                const isEditing = editingStatus?.status_id === status.status_id;
+
+                return (
+                  <div
+                    key={status.status_id}
+                    className={cn(
+                      'flex items-center gap-2 p-3 rounded-lg border bg-card',
+                      `border-l-4 ${borderColor}`
+                    )}
+                  >
+                    {isEditing ? (
+                      <>
+                        <Input
+                          value={editingStatusName}
+                          onChange={(e) => setEditingStatusName(e.target.value)}
+                          className="h-7 text-sm flex-1"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleUpdateStatus();
+                            if (e.key === 'Escape') setEditingStatus(null);
+                          }}
+                          autoFocus
+                        />
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-green-600"
+                          onClick={handleUpdateStatus}
+                          disabled={statusSubmitting}
+                        >
+                          <Check className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          onClick={() => setEditingStatus(null)}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="flex-1 text-sm font-medium">{status.name}</span>
+                        <span className="text-xs text-muted-foreground">{taskCount} task{taskCount !== 1 ? 's' : ''}</span>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          onClick={() => {
+                            setEditingStatus(status);
+                            setEditingStatusName(status.name);
+                          }}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-destructive hover:text-destructive"
+                          onClick={() => setDeletingStatus(status)}
+                          disabled={taskCount > 0}
+                          title={taskCount > 0 ? 'Cannot delete: tasks are using this status' : 'Delete status'}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Add new status */}
+            <div className="space-y-3">
+              {statuses.length >= MAX_STATUSES && (
+                <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400">
+                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <p className="text-xs">
+                    Maximum of {MAX_STATUSES} statuses reached. Delete an existing status to add a new one.
+                  </p>
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <Label className="text-sm">Add New Status</Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={newStatusName}
+                    onChange={(e) => setNewStatusName(e.target.value)}
+                    placeholder="Status name..."
+                    className="text-sm"
+                    disabled={statuses.length >= MAX_STATUSES || statusSubmitting}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleCreateStatus();
+                    }}
+                  />
+                  <Button
+                    size="sm"
+                    onClick={handleCreateStatus}
+                    disabled={
+                      !newStatusName.trim() ||
+                      statuses.length >= MAX_STATUSES ||
+                      statusSubmitting
+                    }
+                  >
+                    {statusSubmitting ? <LoadingSpinner size="sm" /> : <Plus className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
     </DashboardLayout>
   );
 };

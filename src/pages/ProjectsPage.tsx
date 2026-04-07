@@ -66,14 +66,7 @@ const ProjectsPage = () => {
       setEditingProject(null);
       toast({ title: 'Project updated successfully' });
     } else if (error) {
-      // Demo: update locally
-      setProjects(
-        projects.map((p) =>
-          p.project_id === editingProject.project_id ? { ...p, ...data, updated_at: new Date().toISOString() } : p
-        )
-      );
-      setEditingProject(null);
-      toast({ title: 'Project updated successfully' });
+      toast({ title: 'Failed to update project', description: error, variant: 'destructive' });
     }
   };
 
@@ -81,10 +74,13 @@ const ProjectsPage = () => {
     if (!deletingProject) return;
     const { error } = await projectsApi.delete(deletingProject.project_id);
 
-    // Demo: always delete locally
-    setProjects(projects.filter((p) => p.project_id !== deletingProject.project_id));
+    if (!error) {
+      setProjects(projects.filter((p) => p.project_id !== deletingProject.project_id));
+      toast({ title: 'Project deleted successfully' });
+    } else {
+      toast({ title: 'Failed to delete project', description: error, variant: 'destructive' });
+    }
     setDeletingProject(null);
-    toast({ title: 'Project deleted successfully' });
   };
 
   if (isLoading) {
