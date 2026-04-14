@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   DndContext,
@@ -155,6 +155,7 @@ const ProjectDetailsPage = () => {
 
   // Drag state
   const [activeTask, setActiveTask] = useState<Task | null>(null);
+  const dragOriginStatusId = useRef<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -251,11 +252,20 @@ const ProjectDetailsPage = () => {
       })
     );
 
-    const { error } = await tasksApi.updateStatus(task.task_id, statusId);
+    const { data, error } = await tasksApi.moveStatus(task.task_id, statusId);
     if (error) {
       // Revert
       setTasks((prev) => prev.map((t) => (t.task_id === task.task_id ? task : t)));
       toast({ title: 'Failed to update status', description: error, variant: 'destructive' });
+    } else if (data) {
+      // Sync status_name from server response
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.task_id === task.task_id
+            ? { ...t, status_id: data.status_id, status_name: data.status_name }
+            : t
+        )
+      );
     }
   };
 
@@ -263,7 +273,10 @@ const ProjectDetailsPage = () => {
 
   const handleDragStart = (event: DragStartEvent) => {
     const task = tasks.find((t) => t.task_id === event.active.id);
-    if (task) setActiveTask(task);
+    if (task) {
+      setActiveTask(task);
+      dragOriginStatusId.current = task.status_id;
+    }
   };
 
   const handleDragOver = (event: DragOverEvent) => {
@@ -315,12 +328,21 @@ const ProjectDetailsPage = () => {
       if (overTask) targetStatusId = overTask.status_id;
     }
 
-    if (targetStatusId && targetStatusId !== dragged.status_id) {
+    if (targetStatusId && targetStatusId !== dragOriginStatusId.current) {
       // Persist the status change
-      const { error } = await tasksApi.updateStatus(dragged.task_id, targetStatusId);
+      const { data, error } = await tasksApi.moveStatus(dragged.task_id, targetStatusId);
       if (error) {
         toast({ title: 'Failed to move task', description: error, variant: 'destructive' });
         fetchData(); // Revert to server state
+      } else if (data) {
+        // Sync status_name from server response
+        setTasks((prev) =>
+          prev.map((t) =>
+            t.task_id === dragged.task_id
+              ? { ...t, status_id: data.status_id, status_name: data.status_name }
+              : t
+          )
+        );
       }
     }
   };

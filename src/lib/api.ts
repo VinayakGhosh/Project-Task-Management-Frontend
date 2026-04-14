@@ -181,9 +181,9 @@ export const tasksApi = {
       body: JSON.stringify(data),
     }),
 
-  updateStatus: (id: string, status_id: string) =>
-    apiRequest<Task>(`/v1/tasks/${id}/status`, {
-      method: 'PATCH',
+  moveStatus: (id: string, status_id: string) =>
+    apiRequest<{ task_id: string; status_id: string; status_name: string }>(`/v1/tasks/${id}/move`, {
+      method: 'POST',
       body: JSON.stringify({ status_id }),
     }),
 
