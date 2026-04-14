@@ -442,7 +442,7 @@ const ProjectDetailsPage = () => {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="space-y-6 w-full min-w-0 overflow-hidden">
         {/* Header */}
         <div className="flex flex-col gap-4">
           <Link
@@ -495,6 +495,7 @@ const ProjectDetailsPage = () => {
             </Button>
           </div>
         ) : (
+          <div className="w-full min-w-0 overflow-hidden">
           <DndContext
             sensors={sensors}
             collisionDetection={closestCorners}
@@ -502,55 +503,57 @@ const ProjectDetailsPage = () => {
             onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}
           >
-            <div className="flex gap-4 overflow-x-auto pb-4">
-              {statuses.map((status, idx) => {
-                const columnTasks = tasks.filter((t) => t.status_id === status.status_id);
-                const borderColor = COLUMN_BORDER_COLORS[Math.min(idx, COLUMN_BORDER_COLORS.length - 1)];
-                const countColor = COLUMN_COUNT_COLORS[Math.min(idx, COLUMN_COUNT_COLORS.length - 1)];
+            <div className="w-full overflow-x-auto rounded-xl border border-border bg-muted/20 p-4">
+              <div className=" flex gap-4 pb-1" style={{ minWidth: 'max-content' }}>
+                {statuses.map((status, idx) => {
+                  const columnTasks = tasks.filter((t) => t.status_id === status.status_id);
+                  const borderColor = COLUMN_BORDER_COLORS[Math.min(idx, COLUMN_BORDER_COLORS.length - 1)];
+                  const countColor = COLUMN_COUNT_COLORS[Math.min(idx, COLUMN_COUNT_COLORS.length - 1)];
 
-                return (
-                  <div
-                    key={status.status_id}
-                    className="flex flex-col shrink-0 w-72"
-                    id={status.status_id}
-                  >
-                    {/* Column header */}
-                    <div className={cn('flex items-center justify-between mb-3 pb-3 border-b-2', borderColor)}>
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-semibold text-foreground text-sm">{status.name}</h3>
-                        <span className={cn('text-xs font-medium px-1.5 py-0.5 rounded-full', countColor)}>
-                          {columnTasks.length}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Droppable column body */}
-                    <SortableContext
-                      items={columnTasks.map((t) => t.task_id)}
-                      strategy={verticalListSortingStrategy}
+                  return (
+                    <div
+                      key={status.status_id}
+                      className="flex flex-col shrink-0 w-72"
+                      id={status.status_id}
                     >
-                      <DroppableColumn statusId={status.status_id}>
-                        {columnTasks.length === 0 ? (
-                          <div className="flex items-center justify-center h-20 rounded-lg border border-dashed border-muted-foreground/25">
-                            <p className="text-xs text-muted-foreground">Drop tasks here</p>
-                          </div>
-                        ) : (
-                          columnTasks.map((task) => (
-                            <SortableTaskCard
-                              key={task.task_id}
-                              task={task}
-                              statuses={statuses}
-                              onEdit={(t) => setEditingTask(t)}
-                              onDelete={(t) => setDeletingTask(t)}
-                              onStatusChange={handleStatusChange}
-                            />
-                          ))
-                        )}
-                      </DroppableColumn>
-                    </SortableContext>
-                  </div>
-                );
-              })}
+                      {/* Column header */}
+                      <div className={cn('flex items-center justify-between mb-3 pb-3 border-b-2', borderColor)}>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold text-foreground text-sm">{status.name}</h3>
+                          <span className={cn('text-xs font-medium px-1.5 py-0.5 rounded-full', countColor)}>
+                            {columnTasks.length}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Droppable column body */}
+                      <SortableContext
+                        items={columnTasks.map((t) => t.task_id)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        <DroppableColumn statusId={status.status_id}>
+                          {columnTasks.length === 0 ? (
+                            <div className="flex items-center justify-center h-20 rounded-lg border border-dashed border-muted-foreground/25">
+                              <p className="text-xs text-muted-foreground">Drop tasks here</p>
+                            </div>
+                          ) : (
+                            columnTasks.map((task) => (
+                              <SortableTaskCard
+                                key={task.task_id}
+                                task={task}
+                                statuses={statuses}
+                                onEdit={(t) => setEditingTask(t)}
+                                onDelete={(t) => setDeletingTask(t)}
+                                onStatusChange={handleStatusChange}
+                              />
+                            ))
+                          )}
+                        </DroppableColumn>
+                      </SortableContext>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Drag overlay */}
@@ -560,14 +563,15 @@ const ProjectDetailsPage = () => {
                   <TaskCard
                     task={activeTask}
                     statuses={statuses}
-                    onEdit={() => {}}
-                    onDelete={() => {}}
-                    onStatusChange={() => {}}
+                    onEdit={() => { }}
+                    onDelete={() => { }}
+                    onStatusChange={() => { }}
                   />
                 </div>
               )}
             </DragOverlay>
           </DndContext>
+          </div>
         )}
       </div>
 
