@@ -124,7 +124,7 @@ const DroppableColumn = ({
         'flex-1 space-y-2.5 overflow-y-auto pr-1 transition-colors rounded-lg',
         isOver && 'bg-accent/50'
       )}
-      style={{ minHeight: '520px', maxHeight: '520px' }}
+      style={{ minHeight: '4rem' }}
     >
       {children}
     </div>
@@ -503,7 +503,7 @@ const ProjectDetailsPage = () => {
             onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}
           >
-            <div className="w-full overflow-x-auto rounded-xl border border-border bg-muted/20 p-4">
+            <div className="w-full overflow-x-auto rounded-xl border border-border shadow-xl p-4">
               <div className=" flex gap-4 pb-1" style={{ minWidth: 'max-content' }}>
                 {statuses.map((status, idx) => {
                   const columnTasks = tasks.filter((t) => t.status_id === status.status_id);
@@ -513,7 +513,7 @@ const ProjectDetailsPage = () => {
                   return (
                     <div
                       key={status.status_id}
-                      className="flex flex-col shrink-0 w-72"
+                      className="flex flex-col shrink-0 w-72 bg-muted/10 p-2 rounded-lg max-h-[calc(100vh-16rem)] overflow-hidden"
                       id={status.status_id}
                     >
                       {/* Column header */}
